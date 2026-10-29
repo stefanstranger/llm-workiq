@@ -20,6 +20,31 @@ local port, or custom token handling is required.
 - A Microsoft 365 account with the access, licensing, and tenant consent
   required by your WorkIQ deployment.
 
+## Install
+
+Install from [PyPI](https://pypi.org/project/llm-workiq/):
+
+```powershell
+llm install llm-workiq
+```
+
+Or install directly from this repository:
+
+```powershell
+llm install git+https://github.com/stefanstranger/llm-workiq.git
+```
+
+From a local checkout, run:
+
+```powershell
+llm install -e .
+```
+
+Python dependencies are installed automatically. Install the WorkIQ CLI
+separately using its official instructions.
+
+## Authenticate
+
 Sign in using WorkIQ before using this plugin:
 
 ```powershell
@@ -30,44 +55,44 @@ The available WorkIQ versions and authentication commands can differ by
 distribution. Use the official installation instructions for your tenant;
 check `workiq --help` if `auth login` is not available.
 
-## Installation
+## Use
 
-Install directly from this repository:
-
-```powershell
-llm install git+https://github.com/stefanstranger/llm-workiq.git
-```
-
-Or install a local checkout:
+Replace `your-tool-capable-model` with a configured model that supports tool
+calling. Use a provider approved for your workplace data: WorkIQ results
+are sent to the model provider you select.
 
 ```powershell
-llm install -e 'C:\github\llm-workiq'
+llm -m your-tool-capable-model -T WorkIQ "What meetings do I have tomorrow?" --td --ta
+llm chat -m your-tool-capable-model -T WorkIQ --ta
 ```
 
-The plugin is not yet published on PyPI.
+`--ta` (`--tools-approve`) asks you to approve each tool execution.
+`--td` (`--tools-debug`) prints tool calls and results, which can include
+sensitive workplace data. Omit `--td` when you do not need that output.
 
-## Usage
-
-Use a model that supports tool calling:
-
-```powershell
-llm -T WorkIQ "What meetings do I have tomorrow?" --td
-llm chat -T WorkIQ
-```
-
-Select your model as usual:
-
-```powershell
-llm -m "openrouter/openrouter/free" -T WorkIQ "What is my latest discussion with my manager Jess?" --td
-```
-
-The selected model/provider must support tools. Availability and tool
-support of OpenRouter's free routing can vary.
+Offering tools does not force the model to call them. The model decides
+whether a tool is relevant and may answer directly instead.
 
 Do **not** start `workiq mcp` in another terminal. The toolbox starts and
 owns its subprocess. It does not connect directly to
 `https://workiq.svc.cloud.microsoft/mcp`: the local WorkIQ CLI manages that
 authenticated connection.
+
+### Use with Microsoft Foundry
+
+Install the
+[llm-microsoft-foundry plugin](https://github.com/stefanstranger/llm-microsoft-foundry)
+and follow its authentication and model configuration instructions. Enable
+tool support with `--tools` when configuring a tool-capable chat deployment.
+
+For a model configured with the ID `foundry-gpt-5.4`, run:
+
+```powershell
+llm -m foundry-gpt-5.4 -T WorkIQ "What meetings do I have tomorrow?" --td --ta
+```
+
+The Foundry plugin provides the model connection; this plugin provides the
+WorkIQ tools.
 
 ### Inspect or restrict tools
 
@@ -82,12 +107,20 @@ write tools if your server provides them. Restrict the toolbox to selected
 MCP tool names when appropriate:
 
 ```powershell
-llm -T 'WorkIQ(tools=["ask", "fetch"])' "What meetings do I have tomorrow?" --td
+llm -m your-tool-capable-model -T 'WorkIQ(tools=["ask", "fetch"])' "What meetings do I have tomorrow?" --ta
 ```
 
 Tool names shown to the model have a `WorkIQ_` prefix, for example
 `WorkIQ_fetch`. The `tools` option takes the original, unprefixed MCP names.
 An unavailable tool name produces an error instead of being silently ignored.
+
+### Options
+
+| Option    | Default     | Description                                    |
+|-----------|-------------|------------------------------------------------|
+| `command` | `"workiq"`  | Executable path or argv list, without `mcp`     |
+| `timeout` | `120`       | Timeout in seconds per MCP request             |
+| `tools`   | All tools   | Allow-list of original, unprefixed MCP names    |
 
 ### Executable and timeout
 
@@ -95,14 +128,14 @@ The default executable is `workiq` and the timeout is 120 seconds per MCP
 request. Increase it for long-running agentic queries:
 
 ```powershell
-llm -T 'WorkIQ(timeout=300)' "Summarize this week''s project discussions" --td
+llm -m your-tool-capable-model -T 'WorkIQ(timeout=300)' "Summarize this week''s project discussions" --ta
 ```
 
 On Windows, the plugin resolves npm's `workiq.cmd` shim. You can also specify
 an explicit executable, using escaped backslashes in toolbox JSON strings:
 
 ```powershell
-llm -T 'WorkIQ(command="C:\\Users\\you\\AppData\\Roaming\\npm\\workiq.cmd")' "List my meetings" --td
+llm -m your-tool-capable-model -T 'WorkIQ(command="C:\\Users\\you\\AppData\\Roaming\\npm\\workiq.cmd")' "List my meetings" --ta
 ```
 
 `command` can be an argv list, such as `["node", "C:\\path\\to\\workiq.js"]`.
@@ -141,13 +174,15 @@ finally:
 - WorkIQ results are sent to the model provider you select. LLM may also
   record tool calls and results in its local logs. Use a provider approved
   for your work data, and configure LLM logging as needed.
-- The plugin adds no approval UI. Enabling write tools permits the model
-  to request those actions; use a tool allow-list if you only need reads.
+- The plugin adds no approval UI of its own. Use LLM's `--ta` option to
+  approve each tool execution. Enabling write tools permits the model to
+  request those actions; use a tool allow-list if you only need reads.
 
 ## Development
 
 ```powershell
-uv sync --group dev
+llm install -e .
+uv sync --locked --group dev
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
@@ -159,23 +194,8 @@ network access, or model API key.
 
 ## Publishing
 
-The [Publish to PyPI workflow](.github/workflows/publish.yml) runs on pushes
-to `main`, including merged pull requests, or manually through GitHub Actions
-with `main` selected. It skips versions already published on PyPI.
-
-Configure the `pypi` GitHub environment with an environment secret named
-`PYPI_API_TOKEN` containing your PyPI API token. For the first release, use
-an account-scoped token; after the project exists, replace it with a
-project-scoped token. Environment approval rules can protect publishing.
-
-For each release, update `version` in [pyproject.toml](pyproject.toml) and
-refresh the lockfile with `uv lock` before merging into `main`. The workflow
-runs tests and Ruff checks, builds the wheel and source distribution, and
-validates package metadata before uploading to PyPI. Published versions
-cannot be overwritten.
-
-After the first successful publication, install the plugin with
-`llm install llm-workiq`.
+See the [publishing guide](PUBLISHING.md) for release setup and maintainer
+instructions.
 
 ## License
 
