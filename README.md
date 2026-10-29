@@ -1,4 +1,7 @@
-# llm-workiq
+---
+title: llm-workiq
+description: Use Microsoft WorkIQ tools with the LLM command-line tool.
+---
 
 Use Microsoft WorkIQ's Microsoft 365 tools with
 [LLM](https://llm.datasette.io/), Simon Willison's command-line tool and Python
@@ -153,6 +156,26 @@ uv build
 
 Tests use a fake local MCP subprocess. They require no Microsoft account,
 network access, or model API key.
+
+## Publishing
+
+The [Publish to PyPI workflow](.github/workflows/publish.yml) runs on pushes
+to `main`, including merged pull requests, or manually through GitHub Actions
+with `main` selected. It skips versions already published on PyPI.
+
+Configure the `pypi` GitHub environment with an environment secret named
+`PYPI_API_TOKEN` containing your PyPI API token. For the first release, use
+an account-scoped token; after the project exists, replace it with a
+project-scoped token. Environment approval rules can protect publishing.
+
+For each release, update `version` in [pyproject.toml](pyproject.toml) and
+refresh the lockfile with `uv lock` before merging into `main`. The workflow
+runs tests and Ruff checks, builds the wheel and source distribution, and
+validates package metadata before uploading to PyPI. Published versions
+cannot be overwritten.
+
+After the first successful publication, install the plugin with
+`llm install llm-workiq`.
 
 ## License
 
